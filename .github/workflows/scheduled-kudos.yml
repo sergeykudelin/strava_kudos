@@ -1,13 +1,14 @@
 name: Run Strava Kudos Bot
 
 on:
-  workflow_dispatch: # Allows manual triggering from the Actions tab
+  # Allows manual triggering from the Actions tab
+  workflow_dispatch:
   schedule:
     # Note: GitHub Actions uses UTC. Calgary is in Mountain Time (MDT/MST).
     # MDT is UTC-6, MST is UTC-7. These cron times are set based on MDT.
     # The actual run time may shift by an hour depending on daylight saving time.
-    - cron: '0 14 * * *' # Approximately 8:00 AM in Calgary (MDT)
-    - cron: '0 0 * * *'  # Approximately 6:00 PM in Calgary (MDT)
+    - cron: '0 14 * * *' # Approximately 8:00 AM in Calgary
+    - cron: '0 0 * * *'  # Approximately 6:00 PM in Calgary
 
 jobs:
   run-kudos:
