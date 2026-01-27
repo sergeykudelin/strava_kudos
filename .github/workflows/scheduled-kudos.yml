@@ -2,11 +2,6 @@ name: Run Strava Kudos Bot
 
 on:
   workflow_dispatch:
-  schedule:
-    # Calgary is UTC-7 (Standard Time). 
-    # 8:00 AM Calgary = 15:00 UTC
-    # 6:00 PM Calgary = 01:00 UTC
-    - cron: '0 1,15 * * *'
 
 jobs:
   run-kudos:
