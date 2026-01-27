@@ -31,3 +31,17 @@ jobs:
 
       - name: Run the kudos script
         run: npm start
+
+      - name: Send email on failure
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: Strava Kudos Bot Failed
+          to: ${{ secrets.MAIL_TO }}
+          from: Strava Kudos Bot
+          body: The scheduled Strava Kudos run failed. Please check the logs at https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
