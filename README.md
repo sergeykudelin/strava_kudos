@@ -320,3 +320,4 @@ The application follows a **modular ES6 architecture**:
 2. Open Developer Tools (F12)
 3. Go to Application/Storage → Cookies → https://www.strava.com
 4. Find the `_strava4_session` cookie and copy its value (use as `stravaSessionCookie` in config)
+new line
