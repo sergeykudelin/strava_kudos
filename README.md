@@ -1,4 +1,4 @@
-# Strava Auto-Kudos  👍
+1# Strava Auto-Kudos  👍
 
 A Node.js application designed to intelligently automate giving kudos to Strava activities based on configurable rules.
 
