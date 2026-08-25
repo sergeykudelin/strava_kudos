@@ -1,0 +1,43 @@
+name: Keep repository active
+
+# GitHub disables scheduled workflows after 60 days without repo activity.
+# This job commits a small timestamp update roughly monthly so schedules keep running.
+on:
+  workflow_dispatch:
+  schedule:
+    # 1st day of each month at 03:17 UTC
+    - cron: '17 3 1 * *'
+
+permissions:
+  contents: write
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Need full history so we can push a commit
+          fetch-depth: 0
+
+      - name: Update keepalive timestamp
+        run: |
+          mkdir -p .github
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > .github/keepalive.txt
+          echo "Updated keepalive.txt:"
+          cat .github/keepalive.txt
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add .github/keepalive.txt
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git commit -m "chore: keep repository active for scheduled workflows"
+          git push
