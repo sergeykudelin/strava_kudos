@@ -19,15 +19,16 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Create config.yaml from secret
-        env:
-          CONFIG_YAML: ${{ secrets.CONFIG_YAML }}
-        run: echo "$CONFIG_YAML" > config.yaml
+      - name: Prepare config.yaml
+        run: cp config.yaml.example config.yaml
 
       - name: Install dependencies
         run: npm install
 
       - name: Run the kudos script
+        env:
+          STRAVA_SESSION_COOKIE: ${{ secrets.STRAVA_SESSION_COOKIE }}
+          ATHLETE_ID: ${{ secrets.ATHLETE_ID }}
         run: npm start
 
       - name: Send email on failure

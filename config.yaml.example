@@ -16,11 +16,11 @@ kudoRules:
     IndoorCycling: 20
     AlpineSki: 10
   minTime:
-    Workout: 45
-    Walk: 60
-    Hike: 60
-    Swim: 30
-    WeightTraining: 45
+    Workout: 15
+    Walk: 15
+    Hike: 15
+    Swim: 15
+    WeightTraining: 15
   activityNames:
     - "race|marathon|competition"
     - "birthday.*run"

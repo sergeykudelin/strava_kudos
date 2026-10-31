@@ -21,6 +21,12 @@ import yaml from 'js-yaml';
  */
 export async function loadAndValidateConfig() {
     const config = await loadConfig();
+    if (process.env.STRAVA_SESSION_COOKIE) {
+        config.stravaSessionCookie = process.env.STRAVA_SESSION_COOKIE;
+    }
+    if (process.env.ATHLETE_ID) {
+        config.athleteId = process.env.ATHLETE_ID;
+    }
     validateConfig(config);
     return normalizeConfig(config);
 }

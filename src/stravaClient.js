@@ -7,7 +7,7 @@ import { decode } from 'html-entities';
  * @param {number} timeout - Request timeout in milliseconds
  * @returns {Promise<string>} Response data
  */
-function makeRequest(options, timeout) {
+function makeRequest(options, timeout, maxRedirects = 5) {
     return new Promise((resolve, reject) => {
         const requestOptions = {
             ...options,
@@ -16,6 +16,29 @@ function makeRequest(options, timeout) {
 
         const req = https.request(requestOptions, (res) => {
             let data = '';
+
+            // Handle redirects (e.g. /dashboard -> /dashboard?dashboard_next=1)
+            if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
+                res.resume();
+                if (res.headers.location.includes('/login')) {
+                    const error = new Error(`HTTP ${res.statusCode}: Redirected to login (invalid or expired session cookie)`);
+                    error.statusCode = res.statusCode;
+                    reject(error);
+                    return;
+                }
+                if (maxRedirects <= 0) {
+                    reject(new Error('Too many redirects'));
+                    return;
+                }
+                const redirectUrl = new URL(res.headers.location, `https://${options.hostname}`);
+                const redirectOptions = {
+                    ...options,
+                    hostname: redirectUrl.hostname,
+                    path: redirectUrl.pathname + redirectUrl.search,
+                };
+                resolve(makeRequest(redirectOptions, timeout, maxRedirects - 1));
+                return;
+            }
 
             // Handle non-200 status codes
             if (res.statusCode < 200 || res.statusCode >= 300) {
@@ -65,7 +88,7 @@ async function getCsrfToken(cookieValue, timeout) {
     };
 
     const data = await makeRequest(options, timeout);
-    const csrfTokenMatch = data.match(/<meta name="csrf-token" content="([^"]+)"/);
+    const csrfTokenMatch = data.match(/<meta name="csrf(?:-token)?" content="([^"]+)"/);
 
     if (csrfTokenMatch) {
         const csrfToken = csrfTokenMatch[1];
@@ -96,29 +119,68 @@ function transformGroupActivity(activity) {
 }
 
 /**
- * Parse activities from dashboard HTML response
- * @param {string} htmlData - HTML response from dashboard
- * @returns {Array} Parsed activities
+ * Extract activities from feed entries array
+ * @param {Array} entries - Feed entries
+ * @returns {Array} Normalized activities
  */
-function parseActivitiesFromDashboard(htmlData) {
-    const reactPropsMatches = [...htmlData.matchAll(/data-react-props='([^']+)'/g)].map((match) => match[1]);
-
-    let activities = [];
-
-    reactPropsMatches.forEach((match) => {
-        try {
-            const reactProps = JSON.parse(decode(match));
-            const entries = reactProps?.appContext?.feedProps?.preFetchedEntries || [];
-
-            entries.forEach((entry) => {
-                if (entry.entity === 'Activity') activities.push(entry.activity);
-                else if (entry.entity === 'GroupActivity') activities.push(...entry.rowData.activities.map(transformGroupActivity));
-            });
-        } catch (parseError) {
-            // Skip malformed JSON, continue processing
-            console.warn('Failed to parse react props:', parseError.message);
+function extractActivitiesFromEntries(entries = []) {
+    const activities = [];
+    entries.forEach((entry) => {
+        if (entry.entity === 'Activity' && entry.activity) {
+            activities.push(entry.activity);
+        } else if (entry.entity === 'GroupActivity' && entry.rowData?.activities) {
+            activities.push(...entry.rowData.activities.map(transformGroupActivity));
         }
     });
+    return activities;
+}
+
+/**
+ * Parse activities from dashboard response (JSON feed, Next.js __NEXT_DATA__, or legacy data-react-props)
+ * @param {string} responseData - Response from dashboard or feed endpoint
+ * @returns {Array} Parsed activities
+ */
+function parseActivitiesFromDashboard(responseData) {
+    let activities = [];
+
+    // 1. Try parsing direct JSON feed response (/dashboard/feed)
+    try {
+        const parsedJson = JSON.parse(responseData);
+        if (Array.isArray(parsedJson?.entries)) {
+            activities.push(...extractActivitiesFromEntries(parsedJson.entries));
+        }
+    } catch {
+        // Not direct JSON, try HTML formats below
+    }
+
+    // 2. Try Next.js __NEXT_DATA__ script tag (dashboard_next=1)
+    if (activities.length === 0) {
+        const nextDataMatch = responseData.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+        if (nextDataMatch) {
+            try {
+                const nextData = JSON.parse(nextDataMatch[1]);
+                const entries = nextData?.props?.pageProps?.dashboardData?.feed?.entries || [];
+                activities.push(...extractActivitiesFromEntries(entries));
+            } catch (parseError) {
+                console.warn('Failed to parse __NEXT_DATA__:', parseError.message);
+            }
+        }
+    }
+
+    // 3. Fallback to legacy data-react-props
+    if (activities.length === 0) {
+        const reactPropsMatches = [...responseData.matchAll(/data-react-props='([^']+)'/g)].map((match) => match[1]);
+
+        reactPropsMatches.forEach((match) => {
+            try {
+                const reactProps = JSON.parse(decode(match));
+                const entries = reactProps?.appContext?.feedProps?.preFetchedEntries || [];
+                activities.push(...extractActivitiesFromEntries(entries));
+            } catch (parseError) {
+                console.warn('Failed to parse react props:', parseError.message);
+            }
+        });
+    }
 
     if (activities.length === 0) throw new Error('No activities found - check session cookie validity');
 
@@ -161,7 +223,7 @@ export class StravaClient {
 
         const options = {
             hostname: 'www.strava.com',
-            path: `/dashboard?num_entries=${numEntries}`,
+            path: `/dashboard/feed?feed_type=following&num_entries=${numEntries}`,
             method: 'GET',
             headers: {
                 'Cookie': this.cookieValue,
